@@ -94,11 +94,6 @@ static int writeread(char *basename, int results[], time_t start_time, unsigned 
 
     wbuf = calloc(xlfile_size, sizeof(char));
 
-    // Make one buffer at max size
-    for (int idx = 0; idx < xlfile_size; idx++) {
-        wbuf[idx] = randomchar();
-    }
-
     current_time = time(NULL);
     if (current_time > start_time) {
         printf("ERROR: start_time is in the past\n");
@@ -116,6 +111,11 @@ static int writeread(char *basename, int results[], time_t start_time, unsigned 
                 bool success = true;
                 v_printf("Write: %lu\n", time(NULL));
                 sprintf(filename, "%s-%s-%d", basename, sizes[idx].name, iter);
+                // Make one buffer at max size
+                for (int jdx = 0; jdx < sizes[jdx].size; jdx++) {
+                    wbuf[jdx] = randomchar();
+                }
+
                 unlink(filename);
                 sleep(2); // So the delete and the create are not on the same second
                 fd = open(filename, O_RDWR | O_CREAT, 0640);
@@ -186,7 +186,7 @@ static int writeread(char *basename, int results[], time_t start_time, unsigned 
                     close(fd);
                 }
             }
-            
+
             // v_printf("Calculating ...\n");
             start_time += sizes[idx].interval;
             current_time = time(NULL);
@@ -200,7 +200,7 @@ static int writeread(char *basename, int results[], time_t start_time, unsigned 
             sleep(sleep_time);
         }
     }
-    
+
     return 0;
 }
 
@@ -283,7 +283,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (!fail) calculate_latencies(latencyResults, num_iters);
-    
+
     if (results[ReadErrors] > 0 || results[WriteErrors] > 0 || results[OpenErrors] > 0) {
         fail = true;
     }
