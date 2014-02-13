@@ -51,11 +51,11 @@ struct size_s {
     int interval;
 };
 
-struct size_s sizes[] = { {"xl", 1024 * 1024 * 100 + 1, 120},
-                        {"lg", 1024 * 1024 * 10 + 1, 100},
-                        {"med", 1024 * 1024 + 1, 80},
-                        {"sm", 1024 * 100 + 1, 40},
-                        {"xs", 1024 * 10 + 1, 40}
+struct size_s sizes[] = { {"xl", 1024 * 1024 * 100 + 1, 90},
+                        {"lg", 1024 * 1024 * 10 + 1, 50},
+                        {"med", 1024 * 1024 + 1, 40},
+                        {"sm", 1024 * 100 + 1, 30},
+                        {"xs", 1024 * 10 + 1, 20}
                       };
 
 
@@ -101,6 +101,7 @@ static int writeread(char *basename, int results[], time_t start_time, unsigned 
         return -1;
     }
     sleep(start_time - current_time);
+    start_time = time(NULL);
 
     for (int idx = 0; idx < num_sizes; idx++) {
         for (int iter = 0; iter < num_iters; iter++) {
