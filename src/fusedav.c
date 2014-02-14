@@ -1087,7 +1087,6 @@ finish:
 
 static int dav_release(const char *path, __unused struct fuse_file_info *info) {
     struct fusedav_config *config = fuse_get_context()->private_data;
-    const char *cache_uri = NULL;
     GError *gerr = NULL;
     GError *gerr2 = NULL;
     int ret = 0;
@@ -1100,6 +1099,7 @@ static int dav_release(const char *path, __unused struct fuse_file_info *info) {
     // We still need to close the file.
 
     if (path != NULL) {
+        const char *cache_uri = NULL;
         if (config->using_peer_cache) cache_uri = config->cache_uri;
         bool wrote_data = filecache_sync(config->cache, path, info, true, cache_uri, &gerr);
 
@@ -1242,7 +1242,6 @@ static int dav_fsync(const char *path, __unused int isdatasync, struct fuse_file
 
 static int dav_flush(const char *path, struct fuse_file_info *info) {
     struct fusedav_config *config = fuse_get_context()->private_data;
-    const char *cache_uri = NULL;
     GError *gerr = NULL;
 
     BUMP(dav_flush);
@@ -1251,6 +1250,7 @@ static int dav_flush(const char *path, struct fuse_file_info *info) {
 
     // path might be NULL because we are accessing a bare file descriptor,
     if (path != NULL) {
+        const char *cache_uri = NULL;
         bool wrote_data;
         // Zero-out structure; some fields we don't populate but want to be 0, e.g. st_atim.tv_nsec
         struct stat_cache_value value;
@@ -1423,7 +1423,6 @@ static bool file_too_big(off_t fsz, off_t maxsz) {
 
 static int dav_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *info) {
     struct fusedav_config *config = fuse_get_context()->private_data;
-    const char *cache_uri = NULL;
     GError *gerr = NULL;
     ssize_t bytes_written;
     struct stat_cache_value value;
@@ -1447,6 +1446,7 @@ static int dav_write(const char *path, const char *buf, size_t size, off_t offse
     }
 
     if (path != NULL) {
+        const char *cache_uri = NULL;
         int fd;
         if (config->using_peer_cache) cache_uri = config->cache_uri;
         filecache_sync(config->cache, path, info, false, cache_uri, &gerr);

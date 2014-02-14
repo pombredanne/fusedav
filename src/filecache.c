@@ -142,7 +142,6 @@ static char *path2key(const char *path) {
  */
 struct curl_slist* enhanced_logging(struct curl_slist *slist, int log_level, int section, const char *format, ...) {
     va_list ap;
-    int ret;
 
     // If we are injecting errors, we can trigger enhanced logging by decrementing
     // the log level (LOG_INFO -> LOG_NOTICE)
@@ -150,6 +149,7 @@ struct curl_slist* enhanced_logging(struct curl_slist *slist, int log_level, int
         log_level -= 1;
     }
     if (logging(log_level, section)) {
+        int ret;
         char *user_agent = NULL;
         char msg[81] = {0};
         slist = curl_slist_append(slist, "Log-To-Journal: true");
