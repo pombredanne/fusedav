@@ -92,7 +92,7 @@ static char *path2key(const char *path, bool prefix) {
     size_t pos = 0;
     bool slash_found = false;
     size_t last_slash_pos = 0;
-    
+
     BUMP(statcache_path2key);
 
     if (prefix)
@@ -106,7 +106,7 @@ static char *path2key(const char *path, bool prefix) {
         }
         ++pos;
     }
-    
+
     // If we indicated a prefix, and found a slash in the trailing position,
     // we counted it for depth, but shouldn't have. So decrement the depth.
     // Also, since we already have a slash on the end, don't add another one.
@@ -122,7 +122,7 @@ static char *path2key(const char *path, bool prefix) {
     else {
         asprintf(&key, "%u%s", depth, path);
     }
-    
+
     log_print(LOG_DEBUG, SECTION_STATCACHE_DEFAULT, "path2key: %s, %i, %s", path, prefix, key);
 
     return key;
@@ -210,6 +210,10 @@ struct stat_cache_value *stat_cache_value_get(stat_cache_t *cache, const char *p
     BUMP(statcache_value_get);
 
     key = path2key(path, false);
+    if (key == NULL) {
+        g_set_error (gerr, leveldb_quark(), E_SC_LDBERR, "stat_cache_value_get: path2key returns NULL: %s", errptr ? errptr : "inject-error");
+        return NULL;
+    }
 
     log_print(LOG_DEBUG, SECTION_STATCACHE_CACHE, "stat_cache_value_get: key %s", key);
 
@@ -255,7 +259,7 @@ struct stat_cache_value *stat_cache_value_get(stat_cache_t *cache, const char *p
                 log_print(LOG_DEBUG, SECTION_STATCACHE_CACHE, "stat_cache_value_get: Stat entry %s is %lu seconds old.", path, current_time - value->updated);
                 return NULL;
             }
-            
+
             directory_updated = stat_cache_read_updated_children(cache, directory, &tmpgerr);
             if (tmpgerr) {
                 g_propagate_prefixed_error(gerr, tmpgerr, "stat_cache_value_get: ");
@@ -270,7 +274,7 @@ struct stat_cache_value *stat_cache_value_get(stat_cache_t *cache, const char *p
             }
         }
     }
-    
+
     /* Hack alert!
      * Remove this code by 1 Jan 2015!
      * On doing a complete PROPFIND, the DAV:reponse we were resetting stat values
@@ -289,12 +293,17 @@ struct stat_cache_value *stat_cache_value_get(stat_cache_t *cache, const char *p
 
 void stat_cache_updated_children(stat_cache_t *cache, const char *path, time_t timestamp, GError **gerr) {
     leveldb_writeoptions_t *options;
+    int ret;
     char *key = NULL;
     char *errptr = NULL;
 
     BUMP(statcache_updated_ch);
 
-    asprintf(&key, "updated_children:%s", path);
+    ret = asprintf(&key, "updated_children:%s", path);
+    if (ret == -1) {
+        g_set_error(gerr, leveldb_quark(), errno, "stat_cache_updated_children: asprintf failed on updated_children");
+        return;
+    }
 
     options = leveldb_writeoptions_create();
     if (timestamp == 0)
@@ -306,7 +315,8 @@ void stat_cache_updated_children(stat_cache_t *cache, const char *path, time_t t
     free(key);
 
     if (errptr != NULL || inject_error(statcache_error_childrenldb)) {
-        g_set_error (gerr, leveldb_quark(), E_SC_LDBERR, "stat_cache_updated_children: leveldb_set error: %s", errptr ? errptr : "inject-error");
+        g_set_error (gerr, leveldb_quark(), E_SC_LDBERR, "stat_cache_updated_children: leveldb_set error: %s",
+            errptr ? errptr : "inject-error");
         free(errptr);
         return;
     }
@@ -368,21 +378,26 @@ void stat_cache_value_set(stat_cache_t *cache, const char *path, struct stat_cac
     value->local_generation = stat_cache_get_local_generation();
 
     key = path2key(path, false);
-    log_print(LOG_DEBUG, SECTION_STATCACHE_CACHE, "CSET: %s (mode %04o: updated %lu: loc_gen %lu)", 
+    if (key == NULL) {
+        g_set_error (gerr, leveldb_quark(), E_SC_LDBERR, "stat_cache_value_set: path2key returns NULL: path: %s; %s", path, errptr ? errptr : "inject-error");
+        return;
+    }
+
+    log_print(LOG_DEBUG, SECTION_STATCACHE_CACHE, "CSET: %s (mode %04o: updated %lu: loc_gen %lu)",
         key, value->st.st_mode, value->updated, value->local_generation);
 
     options = leveldb_writeoptions_create();
     leveldb_put(cache, options, key, strlen(key) + 1, (char *) value, sizeof(struct stat_cache_value), &errptr);
     leveldb_writeoptions_destroy(options);
 
-    free(key);
-
     if (errptr != NULL || inject_error(statcache_error_setldb)) {
-        g_set_error (gerr, leveldb_quark(), E_SC_LDBERR, "stat_cache_value_set: leveldb_set error: %s", errptr ? errptr : "inject-error");
+        g_set_error (gerr, leveldb_quark(), E_SC_LDBERR, "stat_cache_value_set: leveldb_set error: key(%p); value (%p); %s", key, (void *)value, errptr ? errptr : "inject-error");
         free(errptr);
+        free(key);
         return;
     }
 
+    free(key);
     return;
 }
 
@@ -394,6 +409,10 @@ void stat_cache_delete(stat_cache_t *cache, const char *path, GError **gerr) {
     BUMP(statcache_delete);
 
     key = path2key(path, false);
+    if (key == NULL) {
+        g_set_error (gerr, leveldb_quark(), E_SC_LDBERR, "stat_cache_delete: path2key returns NULL: path: %s; %s", path, errptr ? errptr : "inject-error");
+        return;
+    }
 
     log_print(LOG_DEBUG, SECTION_STATCACHE_CACHE, "stat_cache_delete: %s", key);
 
@@ -660,7 +679,7 @@ void stat_cache_delete_older(stat_cache_t *cache, const char *path_prefix, unsig
     log_print(LOG_DEBUG, SECTION_STATCACHE_CACHE, "stat_cache_delete_older: %s", path_prefix);
     iter = stat_cache_iter_init(cache, path_prefix);
     while ((entry = stat_cache_iter_current(iter))) {
-        log_print(LOG_DEBUG, SECTION_STATCACHE_CACHE, "stat_cache_delete_older: %s: min_gen %lu: loc_gen %lu", 
+        log_print(LOG_DEBUG, SECTION_STATCACHE_CACHE, "stat_cache_delete_older: %s: min_gen %lu: loc_gen %lu",
             entry->key, minimum_local_generation, entry->value->local_generation);
         if (entry->value->local_generation < minimum_local_generation) {
             stat_cache_delete(cache, key2path(entry->key), &tmpgerr);
@@ -713,7 +732,7 @@ void stat_cache_prune(stat_cache_t *cache) {
     int issues = 0;
     clock_t elapsedtime;
     static unsigned int numcalls = 0;
-    static unsigned long totaltime = 0; // 
+    static unsigned long totaltime = 0;
 
     BUMP(statcache_prune);
 

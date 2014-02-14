@@ -491,12 +491,11 @@ static int construct_resolve_slist(CURL *session, bool force) {
     return res;
 }
 
-CURL *session_request_init(const char *path, const char *query_string, bool temporary_handle) {
+CURL *session_request_init(const char *path, const char *query_string, bool temporary_handle, bool new_slist) {
     CURL *session;
     char *full_url = NULL;
     char *escaped_path;
     int error;
-    bool force = false;
 
     if (temporary_handle) {
         session = session_get_temp_handle();
@@ -552,7 +551,7 @@ CURL *session_request_init(const char *path, const char *query_string, bool temp
     curl_easy_setopt(session, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
     curl_easy_setopt(session, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 
-    error = construct_resolve_slist(session, force);
+    error = construct_resolve_slist(session, new_slist);
     /* If we get an error from construct_resolve_slist, we didn't set up the
      * randomized slist and call CURLOPT_RESOLVE. libcurl will revert to calling
      * getaddrinfo on its own, and use the first, sorted address it returns.

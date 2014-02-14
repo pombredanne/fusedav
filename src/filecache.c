@@ -210,15 +210,16 @@ static void filecache_pdata_set(filecache_t *cache, const char *path,
     leveldb_put(cache, options, key, strlen(key) + 1, (const char *) pdata, sizeof(struct filecache_pdata), &ldberr);
     leveldb_writeoptions_destroy(options);
 
-    free(key);
 
     // ldb error will cause file to go to forensic haven.
     if (ldberr != NULL || inject_error(filecache_error_setldb)) {
-        g_set_error(gerr, leveldb_quark(), E_FC_LDBERR, "filecache_pdata_set: leveldb_put error %s", ldberr ? ldberr : "inject-error");
+        g_set_error(gerr, leveldb_quark(), E_FC_LDBERR, "filecache_pdata_set: leveldb_put error: key (%p); pdata (%p); %s", key, (const void *)pdata, ldberr ? ldberr : "inject-error");
         free(ldberr);
+        free(key);
         return;
     }
 
+    free(key);
     return;
 }
 
@@ -442,7 +443,9 @@ static void get_fresh_fd(filecache_t *cache,
         goto finish;
     }
 
-    session = session_request_init(path, NULL, false);
+    // If we're skipping validation, it means we are having connection errors, so passing
+    // it in we cause session to rescramble it's slist.
+    session = session_request_init(path, NULL, false, skip_validation);
     if (!session || inject_error(filecache_error_freshsession)) {
         g_set_error(gerr, curl_quark(), E_FC_CURLERR, "get_fresh_fd: Failed session_request_init on GET");
         goto finish;
@@ -640,7 +643,7 @@ static void get_fresh_fd(filecache_t *cache,
         }
         else if (code == 404) {
             struct stat_cache_value *value;
-            g_set_error(gerr, filecache_quark(), ENOENT, "get_fresh_fd: File expected to exist returns 404.");
+            g_set_error(gerr, filecache_quark(), ENOENT, "get_fresh_fd: %s: File expected to exist returns 404.", path);
             /* we get a 404 because the stat_cache returned that the file existed, but it
              * was not on the server. Deleting it from the stat_cache makes the stat_cache
              * consistent, so the next access to the file will be handled correctly.
@@ -666,9 +669,13 @@ static void get_fresh_fd(filecache_t *cache,
             }
             goto finish;
         }
+        else if (code >= 500) {
+            log_print(LOG_WARNING, SECTION_FILECACHE_OPEN, "get_fresh_fd: %s connection error: %d; ", path, code);
+            g_set_error(gerr, curl_quark(), ENETDOWN, "get_fresh_fd: connection error");
+        }
         else {
             // Not sure what to do here; goto finish, or try the loop another time?
-            log_print(LOG_WARNING, SECTION_FILECACHE_OPEN, "get_fresh_fd: returns %d; expected 304 or 200", code);
+            log_print(LOG_WARNING, SECTION_FILECACHE_OPEN, "get_fresh_fd: %s returns %d; expected 304 or 200", path, code);
         }
     } while (false); // @TODO: Retry here with cURL?
 
@@ -938,7 +945,7 @@ static void put_return_etag(const char *path, int fd, char *etag, const char *ca
 
     log_print(LOG_DEBUG, SECTION_FILECACHE_COMM, "put_return_etag: file size %d", st.st_size);
 
-    session = session_request_init(path, NULL, false);
+    session = session_request_init(path, NULL, false, false);
 
     fp = fdopen(dup(fd), "r");
 
