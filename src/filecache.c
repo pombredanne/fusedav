@@ -213,7 +213,8 @@ static void filecache_pdata_set(filecache_t *cache, const char *path,
 
     // ldb error will cause file to go to forensic haven.
     if (ldberr != NULL || inject_error(filecache_error_setldb)) {
-        g_set_error(gerr, leveldb_quark(), E_FC_LDBERR, "filecache_pdata_set: leveldb_put error: key (%p); pdata (%p); %s", key, (const void *)pdata, ldberr ? ldberr : "inject-error");
+        g_set_error(gerr, leveldb_quark(), E_FC_LDBERR, "filecache_pdata_set: leveldb_put error: key (%p); pdata (%p); %s",
+            key, (const void *)pdata, ldberr ? ldberr : "inject-error");
         free(ldberr);
         free(key);
         return;
